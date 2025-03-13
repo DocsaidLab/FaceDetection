@@ -1,7 +1,6 @@
-# face_detecteion_dev
+# Face Detection Development
 
-This repo is for face detection development. It supports traingin, evaluation, and conversion to onnx.
-SCRFD is the first implementation of this repo.
+This repository is dedicated to face detection development. It supports training, evaluation, and ONNX model conversion. The first implementation included in this repo is SCRFD.
 
 ## Environment setup
 
@@ -66,6 +65,21 @@ SCRFD is the first implementation of this repo.
 
 ## Train
 
+### prepare dataset
+
+We use gdown to download the dataset. Please install it first.
+
+```bash
+pip install gdown
+```
+
+Then download the dataset and untar it.
+
+```bash
+gdown 1nr5QhnDIeiMApzK_fjYsh0BjD3_OwPgw
+tar cvf face_detection.tar
+```
+
 ### without docker
 
 ```bash
@@ -89,11 +103,11 @@ ipython -- torch2onnx.py --config ${config} --ckpt_fpath ${ckpt_fpath} --onnx_fp
 ### Widerface Evaluation
 
 ```bash
-ipython -- benchmark/widerface.py --onnx_fpath ${onnx_fpath} --data_folder ${data_folder}
+ipython -- benchmark/widerface.py --onnx_fpath ${onnx_fpath}
 ```
 
 ### NIST Evaluation
 
 ```bash
-ipython -- benchmark/nist.py --onnx_fpath ${onnx_fpath} --data_folder ${data_folder}
+ipython -- benchmark/nist.py --onnx_fpath ${onnx_fpath}
 ```
