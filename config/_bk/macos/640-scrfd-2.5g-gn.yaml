@@ -1,0 +1,155 @@
+seed: 8888
+phase: from-scratch
+
+lightning_module:
+  show_detail_every_step:
+    train: 0
+    valid: 0.05
+  model:
+    h: 640
+    w: 640
+    backbone_dict:
+      name: scrfd_resv1e_2.5g
+      in_channels: 3
+      out_indices: [2, 3, 4]
+    neck_dict:
+      name: mm_pafpn # if use atorch.build_neck you need this
+      in_channels: [48, 48, 80]
+      out_channels: 24
+      num_outs: 3
+      add_extra_convs: on_output
+      norm_cfg:
+        type: BN
+    head_dict:
+      name: scrfd_head
+      head:
+        n_stack: 2
+        n_levels: 3
+        in_channels: 24
+        hid_channels: 64
+        norm:
+          name: GroupNorm
+          num_groups: 16
+          num_channels: 64
+        act:
+          name: ReLU
+          inplace: true
+        feat_share: true
+        use_scale: true
+      prior:
+        scales: [1.0, 2.0]
+        ratios: [1.0]
+        base_sizes: [16, 64, 256]
+        strides: [8, 16, 32]
+      loss_weight:
+        loc: 2.
+        obj: 1.
+        lmk5pt: 0.1
+      nms_cfg:
+        ScoreTH: 0.2
+        nms_topk: 5000
+        NMSTH: 0.45
+    onnx_dict:
+      export:
+        opset_version: 17 # support better quant block
+        input_names:
+          - rgb
+        output_names:
+          - box_8
+          - score_8
+          - lmk5pt_8
+          - box_16
+          - score_16
+          - lmk5pt_16
+          - box_32
+          - score_32
+          - lmk5pt_32
+  dataset:
+    train:
+      name: ConcatDatasets
+      total_samples: 12800
+      datasets:
+        - name: DatasetFromJson
+          txt_path: data/public/widerface_train/all.txt
+          transforms:
+            - name: SCRFDCropPad
+              dst_size: [640, 640]
+              crop_choice: [0.4, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0]
+              large_face_prob: 0.1
+              large_face_scales: [0.65, 0.7, 0.8, 0.9, 0.95]
+      transforms:
+        - name: PhotoMetricDistortion
+          brightness_delta: 32
+          contrast_range: [0.5, 1.5]
+          saturation_range: [0.5, 1.5]
+          hue_delta: 18
+          gray_prob: 0.1
+        - name: RandomHFlip
+          prob: 0.5
+        - name: BoxClipper
+        - name: Normalize
+          mean: 127.5
+          std: 128
+    valid:
+      name: DatasetFromJson
+      txt_path: data/public/widerface_val/all.txt
+      transforms:
+        - name: ResizePadIfNeed
+          h: 640
+          w: 640
+        - name: Normalize
+          mean: 127.5
+          std: 128
+  dataloader:
+    train:
+      batch_size_per_device: 16
+      num_workers_per_node: 2
+    valid:
+      batch_size_per_device: 16
+      num_workers_per_node: 2
+  solvers:
+    - excludes: []
+      optimizer:
+        name: SGD
+        lr: 0.01
+        momentum: 0.9
+        weight_decay: 0.0005
+      lr_scheduler:
+        name: MultiStepLRWarmUp
+        warmup_milestone: 3 # epoch
+        milestones: [440, 540] # epoch
+        gamma: 0.1
+  # widerface_evaluation:
+  #   enable: true
+  #   on_last: true
+  #   enable_quantize: false
+  #   data_folder: data/processed/widerface_evaluation/images
+  #   gt_folder: data/processed/widerface_evaluation/gt
+
+checkpointer:
+  filename: "{epoch}-nme={valid_nme:3f}-loss={valid_loss:3f}"
+  monitor: valid_loss
+  mode: min
+  verbose: true
+  save_last: true
+  save_top_k: -1
+  save_weights_only: false
+
+callbacks:
+  - name: LearningRateMonitor
+    logging_interval: step
+    log_momentum: true
+  - name: RichModelSummary
+    max_depth: -1
+  - name: RichProgressBar
+
+trainer:
+  precision: 32
+  max_epochs: 640
+  accelerator: mps
+  # devices: 1
+  benchmark: true
+  num_sanity_val_steps: 0
+  check_val_every_n_epoch: 80
+  limit_val_batches: 1.
+  use_distributed_sampler: false
